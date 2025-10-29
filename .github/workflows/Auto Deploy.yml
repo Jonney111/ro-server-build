@@ -29,8 +29,9 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: Jonney111
+          password: ${{ secrets.PAT_TOKEN }}
+
 
       # 4️⃣ 构建 Docker 镜像并打标签
       - name: Build Docker image
