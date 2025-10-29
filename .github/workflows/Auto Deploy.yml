@@ -32,8 +32,8 @@ jobs:
       # 4️⃣ 构建 Docker 镜像并打标签
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/my-image:latest \
-                       -t ghcr.io/${{ github.repository_owner }}/my-image:${{ env.VERSION }} .
+          docker build -t ghcr.io/${{ github.repository_owner }}/ro:latest \
+                       -t ghcr.io/${{ github.repository_owner }}/ro:${{ env.VERSION }} .
 
       # 5️⃣ 推送 Docker 镜像
       - name: Push Docker image
