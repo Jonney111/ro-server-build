@@ -9,6 +9,9 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE_NAME: ro  # 🔹 镜像名变量，修改这里即可
+
     steps:
       # 1️⃣ 检出代码
       - name: Checkout repository
@@ -32,22 +35,27 @@ jobs:
       # 4️⃣ 构建 Docker 镜像并打标签
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/ro:latest \
-                       -t ghcr.io/${{ github.repository_owner }}/ro:${{ env.VERSION }} .
+          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker build -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:latest \
+                       -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION }} .
 
       # 5️⃣ 推送 Docker 镜像
       - name: Push Docker image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/my-image:latest
-          docker push ghcr.io/${{ github.repository_owner }}/my-image:${{ env.VERSION }}
+          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:latest
+          docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       # 6️⃣ 安全异步清理旧镜像，只保留最近3个
       - name: Cleanup old versions
         env:
-          REPO: ${{ github.repository_owner }}/my-image
+          REPO: ${{ github.repository_owner }}/{{ env.IMAGE_NAME }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          REPO=$LOWER_OWNER/${{ env.IMAGE_NAME }}
+
           echo "Fetching tags..."
           TAGS=$(curl -s -H "Authorization: Bearer $TOKEN" \
               -H "Accept: application/vnd.github+json" \
