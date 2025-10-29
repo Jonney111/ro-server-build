@@ -1,8 +1,8 @@
 name: Scheduled Docker Build and Push
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点
+  #schedule:
+   # - cron: '0 3 * * *'  # 每天凌晨3点
   workflow_dispatch:
 
 jobs:
