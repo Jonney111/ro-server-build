@@ -1,9 +1,7 @@
-name: Scheduled Docker Build and Push
+name: Docker Build and Push
 
 on:
-  #schedule:
-   # - cron: '0 3 * * *'  # 每天凌晨3点
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发
 
 jobs:
   build-and-push:
@@ -18,11 +16,13 @@ jobs:
         uses: actions/checkout@v4
 
       # 2️⃣ 设置版本号
-      - name: Set image version
+      - name: Set version tags
         id: vars
         run: |
           DATE_TAG=$(date +'%Y%m%d')
-          echo "VERSION=v$DATE_TAG" >> $GITHUB_ENV
+          SHA_TAG=$(git rev-parse --short HEAD)
+          echo "VERSION_DATE=v$DATE_TAG" >> $GITHUB_ENV
+          echo "VERSION_SHA=sha-$SHA_TAG" >> $GITHUB_ENV
 
       # 3️⃣ 登录 GHCR
       - name: Login to GitHub Container Registry
@@ -32,68 +32,21 @@ jobs:
           username: Jonney111
           password: ${{ secrets.PAT_TOKEN }}
 
-
       # 4️⃣ 构建 Docker 镜像并打标签
       - name: Build Docker image
         run: |
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          docker build -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:latest \
-                       -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION }} .
+          docker build \
+            -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:latest \
+            -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION_DATE }} \
+            -t ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION_SHA }} .
 
       # 5️⃣ 推送 Docker 镜像
       - name: Push Docker image
         run: |
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:latest
-          docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION_DATE }}
+          docker push ghcr.io/$LOWER_OWNER/${{ env.IMAGE_NAME }}:${{ env.VERSION_SHA }}
 
-      # 6️⃣ 安全异步清理旧镜像，只保留最近3个
-      - name: Cleanup old versions
-        env:
-          REPO: ${{ github.repository_owner }}/{{ env.IMAGE_NAME }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          REPO=$LOWER_OWNER/${{ env.IMAGE_NAME }}
 
-          echo "Fetching tags..."
-          TAGS=$(curl -s -H "Authorization: Bearer $TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              https://ghcr.io/v2/$REPO/tags/list | jq -r '.tags[]' | grep '^v' | sort -r)
-
-          COUNT=0
-          for TAG in $TAGS; do
-            COUNT=$((COUNT+1))
-            if [ $COUNT -gt 3 ]; then
-              echo "Deleting old tag: $TAG"
-              
-              # 获取 manifest digest
-              DIGEST=$(curl -sI -H "Authorization: Bearer $TOKEN" \
-                  -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-                  -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-                  https://ghcr.io/v2/$REPO/manifests/$TAG | grep Docker-Content-Digest | awk '{print $2}' | tr -d $'\r')
-              
-              # 重试机制，最多3次
-              RETRIES=0
-              SUCCESS=0
-              while [ $RETRIES -lt 3 ]; do
-                RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-                  -H "Authorization: Bearer $TOKEN" \
-                  -H "Accept: application/vnd.github+json" \
-                  https://ghcr.io/v2/$REPO/manifests/$DIGEST)
-                if [ "$RESPONSE" = "202" ]; then
-                  SUCCESS=1
-                  echo "Deleted $TAG successfully."
-                  break
-                else
-                  echo "Failed to delete $TAG, retrying..."
-                  RETRIES=$((RETRIES+1))
-                  sleep 2
-                fi
-              done
-              if [ $SUCCESS -eq 0 ]; then
-                echo "Warning: failed to delete $TAG after 3 retries."
-              fi
-            fi
-          done
